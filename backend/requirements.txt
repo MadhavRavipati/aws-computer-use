@@ -1,0 +1,48 @@
+# ABOUTME: Python dependencies for AWS Computer Use backend
+# ABOUTME: Includes AWS SDK, testing frameworks, and agent libraries
+
+# Core AWS SDK
+boto3==1.34.14
+botocore==1.34.14
+
+# FastAPI for VNC Bridge API
+fastapi==0.109.0
+uvicorn[standard]==0.25.0
+pydantic==2.5.3
+python-multipart==0.0.6
+
+# VNC and desktop control
+vncdotool==1.2.0
+Pillow==10.2.0
+pyautogui==0.9.54
+
+# WebSocket support
+websockets==12.0
+python-socketio==5.10.0
+
+# Strands Agent SDK (when available)
+# strands-agent-sdk==1.0.0
+
+# Testing
+pytest==7.4.4
+pytest-cov==4.1.0
+pytest-asyncio==0.23.3
+pytest-mock==3.12.0
+moto[all]==4.2.12
+black==23.12.1
+flake8==7.0.0
+mypy==1.8.0
+types-boto3==1.0.2
+
+# AWS Lambda Powertools
+aws-lambda-powertools==2.28.0
+aws-xray-sdk==2.12.1
+
+# Utilities
+python-dotenv==1.0.0
+pyyaml==6.0.1
+aiofiles==23.2.1
+httpx==0.26.0
+
+# Type hints
+boto3-stubs[bedrock,bedrock-runtime,ecs,s3,dynamodb,secretsmanager]==1.34.14
