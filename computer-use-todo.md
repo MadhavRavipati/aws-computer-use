@@ -32,9 +32,6 @@
 ### 3. Repository Setup
 - [ ] Create GitHub/GitLab repository
 - [ ] Set up branch protection rules
-- [ ] Configure CI/CD secrets:
-  - [ ] AWS credentials
-  - [ ] Docker Hub credentials (if needed)
 - [ ] Create folder structure:
   ```
   computer-use-demo/
@@ -107,14 +104,12 @@
 - [ ] Add comprehensive error handling
 - [ ] Write unit tests
 
-### 9. Container CI/CD Pipeline
-- [ ] Set up GitHub Actions workflow
+### 9. Container Build Process
+- [ ] Create build scripts for Docker images
 - [ ] Configure Docker buildx for multi-arch builds
-- [ ] Implement semantic versioning
 - [ ] Add security scanning (Trivy/Snyk)
-- [ ] Push to ECR on main branch
-- [ ] Tag images with commit SHA and version
-- [ ] Add build caching for faster builds
+- [ ] Document manual push process to ECR
+- [ ] Create tagging strategy for versions
 
 ## Phase 3: Bedrock Agent Development (Week 3-4)
 
@@ -310,8 +305,8 @@
 - [ ] Create staging environment
 - [ ] Set up environment isolation
 - [ ] Configure parameter store
-- [ ] Implement blue/green deployments
-- [ ] Create environment promotion pipeline
+- [ ] Document deployment procedures
+- [ ] Create environment-specific configurations
 - [ ] Test rollback procedures
 
 ### 28. Documentation

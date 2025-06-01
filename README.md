@@ -16,7 +16,7 @@ This project transforms Anthropic's single-container Computer Use Demo into a pr
 - **Real-time Streaming**: WebSocket-based VNC streaming for low-latency interaction
 - **Secure Multi-tenancy**: Isolated desktop environments per session
 - **Cost Optimized**: Fargate Spot instances and intelligent caching
-- **Production Ready**: Comprehensive monitoring, security, and CI/CD
+- **Production Ready**: Comprehensive monitoring and security
 
 ## 📐 Architecture
 
@@ -195,13 +195,13 @@ terraform plan -out=tfplan
 terraform apply tfplan
 ```
 
-### CI/CD Pipeline
+### Manual Deployment
 
-The project uses GitHub Actions for automated deployment:
+For this POC, deployment is done manually:
 
-1. **On PR**: Runs tests, linting, and Terraform plan
-2. **On merge to main**: Deploys to staging
-3. **On tag**: Deploys to production
+1. **Development**: Run Terraform apply in dev environment
+2. **Testing**: Execute test suites locally
+3. **Production**: Apply Terraform changes after testing
 
 ## 📊 Monitoring
 
