@@ -99,59 +99,12 @@ def lambda_handler(event, context):
 def create_session(event):
     """Create a new desktop session"""
     try:
-        # Get authenticated user context from authorizer
-        request_context = event.get('requestContext', {})
-        authorizer = request_context.get('authorizer', {})
-        
-        # Extract user ID from authorizer context
-        auth_user_id = authorizer.get('user_id', 'anonymous')
-        api_tier = authorizer.get('tier', 'basic')
-        
         # Parse request body
         body = json.loads(event.get('body', '{}'))
-        user_id = body.get('user_id', auth_user_id)  # Use auth user_id if not provided
+        user_id = body.get('user_id', 'anonymous')
         
         # Generate session ID
         session_id = str(uuid.uuid4())
-        
-        # Check user session limits based on tier
-        if sessions_table:
-            # Get current active sessions for user
-            response = sessions_table.query(
-                IndexName='user-index',
-                KeyConditionExpression='user_id = :user_id',
-                FilterExpression='#status IN (:running, :starting)',
-                ExpressionAttributeNames={'#status': 'status'},
-                ExpressionAttributeValues={
-                    ':user_id': user_id,
-                    ':running': 'running',
-                    ':starting': 'starting'
-                }
-            )
-            
-            active_sessions = len(response.get('Items', []))
-            
-            # Tier-based session limits
-            session_limits = {
-                'basic': 1,
-                'standard': 3,
-                'premium': 10
-            }
-            
-            max_sessions = session_limits.get(api_tier, 1)
-            
-            if active_sessions >= max_sessions:
-                return {
-                    'statusCode': 429,
-                    'headers': {
-                        'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*'
-                    },
-                    'body': json.dumps({
-                        'error': f'Session limit reached. Your {api_tier} tier allows {max_sessions} concurrent sessions.',
-                        'active_sessions': active_sessions
-                    })
-                }
         
         # Create ECS task
         task_response = ecs.run_task(

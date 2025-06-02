@@ -20,9 +20,11 @@ export function VNCViewer({ sessionId }: VNCViewerProps) {
   const [isConnected, setIsConnected] = useState(false)
   const [screenshot, setScreenshot] = useState<string | null>(null)
   
-  const { sendMessage, lastMessage, readyState } = useWebSocket(
-    `${process.env.NEXT_PUBLIC_WS_ENDPOINT}/ws/${sessionId}`
-  )
+  const wsUrl = process.env.NEXT_PUBLIC_WS_ENDPOINT 
+    ? `${process.env.NEXT_PUBLIC_WS_ENDPOINT}?sessionId=${sessionId}`
+    : `ws://localhost:8000/ws/${sessionId}`
+    
+  const { sendMessage, lastMessage, readyState } = useWebSocket(wsUrl)
 
   useEffect(() => {
     if (lastMessage) {

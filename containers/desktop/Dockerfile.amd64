@@ -1,7 +1,7 @@
-# ABOUTME: Docker configuration for Ubuntu desktop environment
-# ABOUTME: Includes XVFB, VNC server, browser, and Python for agent
+# ABOUTME: Simplified Docker configuration for AMD64 architecture
+# ABOUTME: Uses pre-built components for faster deployment
 
-FROM ubuntu:22.04
+FROM --platform=linux/amd64 ubuntu:22.04
 
 # Prevent interactive prompts during installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -9,36 +9,14 @@ ENV DISPLAY=:1
 ENV VNC_RESOLUTION=1920x1080
 ENV VNC_PASSWORD=changeme
 
-# Install system packages
+# Install minimal required packages
 RUN apt-get update && apt-get install -y \
-    # X11 and VNC
     xvfb \
     x11vnc \
-    novnc \
-    websockify \
-    # Window manager
-    openbox \
-    # Browsers
-    firefox \
-    chromium-browser \
-    # Python and tools
-    python3 \
-    python3-pip \
-    python3-venv \
-    # System utilities
     supervisor \
     curl \
-    wget \
-    jq \
-    git \
-    vim \
-    htop \
-    net-tools \
-    iputils-ping \
-    # Fonts
-    fonts-liberation \
-    fonts-dejavu-core \
-    # Clean up
+    python3 \
+    python3-pip \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -55,23 +33,32 @@ RUN mkdir -p /home/desktop/.vnc && \
     x11vnc -storepasswd ${VNC_PASSWORD} /home/desktop/.vnc/passwd && \
     chown -R desktop:desktop /home/desktop/.vnc
 
-# Copy supervisor configuration
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-# Copy startup scripts
-COPY scripts/start-vnc.sh /usr/local/bin/
-COPY scripts/start-desktop.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/start-*.sh
+# Simple supervisor config
+RUN echo "[supervisord]\n\
+nodaemon=true\n\
+\n\
+[program:xvfb]\n\
+command=/usr/bin/Xvfb :1 -screen 0 %(ENV_VNC_RESOLUTION)sx24\n\
+autorestart=true\n\
+user=desktop\n\
+priority=100\n\
+\n\
+[program:x11vnc]\n\
+command=/usr/bin/x11vnc -display :1 -forever -usepw -shared -rfbport 5900 -rfbauth /home/desktop/.vnc/passwd\n\
+autorestart=true\n\
+user=desktop\n\
+priority=200\n\
+" > /etc/supervisor/conf.d/supervisord.conf
 
 # Create working directory
 WORKDIR /app
 
 # Expose ports
-EXPOSE 5900 6080 8080
+EXPOSE 5900
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:6080/ || exit 1
+    CMD pgrep -x x11vnc || exit 1
 
 # Run supervisor
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

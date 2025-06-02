@@ -6,7 +6,6 @@ import json
 import uuid
 import time
 from datetime import datetime, timedelta
-from decimal import Decimal
 import boto3
 from botocore.exceptions import ClientError
 import logging
@@ -14,17 +13,6 @@ import logging
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
-
-class DecimalEncoder(json.JSONEncoder):
-    """Custom JSON encoder for Decimal types from DynamoDB"""
-    def default(self, o):
-        if isinstance(o, Decimal):
-            if o % 1 == 0:
-                return int(o)
-            else:
-                return float(o)
-        return super(DecimalEncoder, self).default(o)
 
 # Initialize AWS clients
 ecs = boto3.client('ecs')
@@ -72,11 +60,6 @@ def lambda_handler(event, context):
         else:
             return {
                 'statusCode': 404,
-                'headers': {
-                    'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                    'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS'
-                },
                 'body': json.dumps({'error': 'Not found'})
             }
     
@@ -84,11 +67,6 @@ def lambda_handler(event, context):
         logger.error(f"Handler error: {e}")
         return {
             'statusCode': 500,
-            'headers': {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS'
-            },
             'body': json.dumps({
                 'error': str(e),
                 'type': type(e).__name__
@@ -99,59 +77,12 @@ def lambda_handler(event, context):
 def create_session(event):
     """Create a new desktop session"""
     try:
-        # Get authenticated user context from authorizer
-        request_context = event.get('requestContext', {})
-        authorizer = request_context.get('authorizer', {})
-        
-        # Extract user ID from authorizer context
-        auth_user_id = authorizer.get('user_id', 'anonymous')
-        api_tier = authorizer.get('tier', 'basic')
-        
         # Parse request body
         body = json.loads(event.get('body', '{}'))
-        user_id = body.get('user_id', auth_user_id)  # Use auth user_id if not provided
+        user_id = body.get('user_id', 'anonymous')
         
         # Generate session ID
         session_id = str(uuid.uuid4())
-        
-        # Check user session limits based on tier
-        if sessions_table:
-            # Get current active sessions for user
-            response = sessions_table.query(
-                IndexName='user-index',
-                KeyConditionExpression='user_id = :user_id',
-                FilterExpression='#status IN (:running, :starting)',
-                ExpressionAttributeNames={'#status': 'status'},
-                ExpressionAttributeValues={
-                    ':user_id': user_id,
-                    ':running': 'running',
-                    ':starting': 'starting'
-                }
-            )
-            
-            active_sessions = len(response.get('Items', []))
-            
-            # Tier-based session limits
-            session_limits = {
-                'basic': 1,
-                'standard': 3,
-                'premium': 10
-            }
-            
-            max_sessions = session_limits.get(api_tier, 1)
-            
-            if active_sessions >= max_sessions:
-                return {
-                    'statusCode': 429,
-                    'headers': {
-                        'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*'
-                    },
-                    'body': json.dumps({
-                        'error': f'Session limit reached. Your {api_tier} tier allows {max_sessions} concurrent sessions.',
-                        'active_sessions': active_sessions
-                    })
-                }
         
         # Create ECS task
         task_response = ecs.run_task(
@@ -233,17 +164,14 @@ def create_session(event):
             'statusCode': 201,
             'headers': {
                 'Content-Type': 'application/json',
-                'X-Session-Id': session_id,
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS'
+                'X-Session-Id': session_id
             },
             'body': json.dumps({
                 'session_id': session_id,
                 'status': 'starting',
                 'task_id': task_id,
-                'websocket_url': f"wss://uaakatj7z0.execute-api.us-west-2.amazonaws.com/dev?session_id={session_id}",
-                'vnc_url': f"http://computer-use-dev-797992487.us-west-2.elb.amazonaws.com/vnc/{session_id}"
+                'websocket_url': f"wss://ws-api-id.execute-api.region.amazonaws.com/prod?session={session_id}",
+                'vnc_url': f"https://alb-dns-name/vnc/{session_id}"
             })
         }
     
@@ -251,11 +179,6 @@ def create_session(event):
         logger.error(f"AWS error creating session: {e}")
         return {
             'statusCode': 503,
-            'headers': {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS'
-            },
             'body': json.dumps({
                 'error': 'Service temporarily unavailable',
                 'details': str(e)
@@ -265,11 +188,6 @@ def create_session(event):
         logger.error(f"Error creating session: {e}")
         return {
             'statusCode': 500,
-            'headers': {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS'
-            },
             'body': json.dumps({
                 'error': str(e)
             })
@@ -329,7 +247,7 @@ def get_session_status(session_id):
             
             return {
                 'statusCode': 200,
-                'body': json.dumps(session, cls=DecimalEncoder)
+                'body': json.dumps(session)
             }
         else:
             return {
@@ -341,11 +259,6 @@ def get_session_status(session_id):
         logger.error(f"Error getting session status: {e}")
         return {
             'statusCode': 500,
-            'headers': {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS'
-            },
             'body': json.dumps({
                 'error': str(e)
             })
@@ -414,11 +327,6 @@ def terminate_session(session_id):
         logger.error(f"Error terminating session: {e}")
         return {
             'statusCode': 500,
-            'headers': {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS'
-            },
             'body': json.dumps({
                 'error': str(e)
             })
@@ -458,7 +366,7 @@ def list_sessions(event):
                 'body': json.dumps({
                     'sessions': active_sessions,
                     'count': len(active_sessions)
-                }, cls=DecimalEncoder)
+                })
             }
         else:
             return {
@@ -470,11 +378,6 @@ def list_sessions(event):
         logger.error(f"Error listing sessions: {e}")
         return {
             'statusCode': 500,
-            'headers': {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS'
-            },
             'body': json.dumps({
                 'error': str(e)
             })

@@ -66,6 +66,16 @@ output "iam_roles" {
   }
 }
 
+output "task_role_arn" {
+  description = "ARN of the ECS task role"
+  value       = aws_iam_role.ecs_task.arn
+}
+
+output "execution_role_arn" {
+  description = "ARN of the ECS execution role"
+  value       = aws_iam_role.ecs_execution.arn
+}
+
 output "log_groups" {
   description = "CloudWatch log group names"
   value = {

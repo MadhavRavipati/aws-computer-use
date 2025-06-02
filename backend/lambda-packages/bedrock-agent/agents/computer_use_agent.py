@@ -10,18 +10,9 @@ from dataclasses import dataclass
 import boto3
 from botocore.exceptions import ClientError
 import logging
-import sys
-
-# Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.retry_handler import retry_async, retry_sync, bedrock_retry_config
-from utils.bedrock_cache import BedrockCache, CachedComputerUseAgent
 
 # Configure logging
 logger = logging.getLogger(__name__)
-
-# Initialize cache
-cache = BedrockCache()
 
 # Since Strands SDK is not yet available, we'll create our own simple implementation
 @dataclass
@@ -46,7 +37,6 @@ class Agent:
         """Add a tool to the agent"""
         self.tools[tool.name] = tool
     
-    @retry_async(config=bedrock_retry_config)
     async def run(self, user_input: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Run the agent with user input"""
         # Prepare the messages for Claude
@@ -84,30 +74,18 @@ class Agent:
             # Parse response
             response_body = json.loads(response['body'].read())
             
-            # Validate response
-            if not response_body.get('content'):
-                raise ValueError("Empty response from Bedrock")
-            
             return {
                 "success": True,
                 "response": response_body.get('content', [{}])[0].get('text', ''),
-                "usage": response_body.get('usage', {}),
-                "model": self.model
+                "usage": response_body.get('usage', {})
             }
             
         except ClientError as e:
-            error_code = e.response.get('Error', {}).get('Code', '')
-            if error_code == 'ValidationException':
-                # Non-retryable validation error
-                logger.error(f"Bedrock validation error: {e}")
-                return {
-                    "success": False,
-                    "error": str(e),
-                    "error_type": "validation"
-                }
-            else:
-                # Let retry handler deal with retryable errors
-                raise
+            logger.error(f"Bedrock invocation failed: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
 
 
 def tool(func: Callable) -> Callable:
@@ -364,9 +342,8 @@ def lambda_handler(event, context):
     api_path = event.get('apiPath')
     parameters = event.get('parameters', [])
     
-    # Initialize our agent with caching
-    base_agent = ComputerUseAgent()
-    agent = CachedComputerUseAgent(base_agent, cache)
+    # Initialize our agent
+    agent = ComputerUseAgent()
     
     # Helper to extract parameter value
     def get_param(name: str) -> Optional[str]:

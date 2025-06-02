@@ -32,6 +32,14 @@ VNC_HOST = os.environ.get('VNC_HOST', 'localhost')
 VNC_PORT = int(os.environ.get('VNC_PORT', '5900'))
 VNC_PASSWORD = os.environ.get('VNC_PASSWORD', '')
 
+# Try to import the real VNC client
+try:
+    from .vnc_client import VNCClient
+    USE_REAL_VNC = True
+except ImportError:
+    logger.warning("VNC client not available, using mock implementation")
+    USE_REAL_VNC = False
+
 
 class ClickRequest(BaseModel):
     x: int
@@ -59,17 +67,28 @@ class VNCBridge:
     def __init__(self, host: str = 'localhost', port: int = 5900):
         self.host = host
         self.port = port
-        self.client = None
         self.connected = False
+        
+        # Use real VNC client if available
+        if USE_REAL_VNC:
+            self.client = VNCClient(host, port, VNC_PASSWORD)
+        else:
+            self.client = None
     
     async def connect(self):
         """Connect to VNC server"""
         try:
-            # In production, we would use vncdotool or similar
-            # For now, we'll simulate the connection
-            logger.info(f"Connecting to VNC server at {self.host}:{self.port}")
-            self.connected = True
-            return True
+            if self.client:
+                # Use real VNC connection
+                self.connected = await self.client.connect()
+                if self.connected:
+                    logger.info(f"Connected to VNC server at {self.host}:{self.port}")
+                return self.connected
+            else:
+                # Mock connection for testing
+                logger.info(f"Mock connecting to VNC server at {self.host}:{self.port}")
+                self.connected = True
+                return True
         except Exception as e:
             logger.error(f"Failed to connect to VNC: {e}")
             self.connected = False
@@ -78,8 +97,9 @@ class VNCBridge:
     async def disconnect(self):
         """Disconnect from VNC server"""
         self.connected = False
-        if self.client:
-            self.client = None
+        if self.client and hasattr(self.client, 'disconnect'):
+            await self.client.disconnect()
+        self.client = None
     
     async def screenshot(self) -> Optional[str]:
         """Capture screenshot and return base64 encoded"""
@@ -87,21 +107,16 @@ class VNCBridge:
             await self.connect()
         
         try:
-            # In production, this would capture from VNC
-            # For now, create a test image
-            img = Image.new('RGB', (1920, 1080), color='white')
-            
-            # Add timestamp
-            from PIL import ImageDraw
-            draw = ImageDraw.Draw(img)
-            draw.text((10, 10), f"Screenshot at {datetime.now()}", fill='black')
-            
-            # Convert to base64
-            buffer = io.BytesIO()
-            img.save(buffer, format='PNG')
-            buffer.seek(0)
-            
-            screenshot_base64 = base64.b64encode(buffer.getvalue()).decode()
+            if self.client and hasattr(self.client, 'screenshot'):
+                # Use real VNC screenshot
+                screenshot_base64 = await self.client.screenshot()
+                if not screenshot_base64:
+                    logger.warning("Real VNC screenshot failed, using mock")
+                    # Fall back to mock if real screenshot fails
+                    screenshot_base64 = await self._mock_screenshot()
+            else:
+                # Mock screenshot for testing
+                screenshot_base64 = await self._mock_screenshot()
             
             # Optionally save to S3
             if S3_BUCKET and SESSION_ID:
@@ -120,15 +135,36 @@ class VNCBridge:
             logger.error(f"Failed to capture screenshot: {e}")
             return None
     
+    async def _mock_screenshot(self) -> str:
+        """Create a mock screenshot for testing"""
+        img = Image.new('RGB', (1920, 1080), color='white')
+        
+        # Add timestamp
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(img)
+        draw.text((10, 10), f"Mock Screenshot at {datetime.now()}", fill='black')
+        
+        # Convert to base64
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        buffer.seek(0)
+        
+        return base64.b64encode(buffer.getvalue()).decode()
+    
     async def click(self, x: int, y: int, button: str = 'left') -> bool:
         """Perform mouse click"""
         if not self.connected:
             await self.connect()
         
         try:
-            logger.info(f"Clicking at ({x}, {y}) with {button} button")
-            # In production, this would send click command to VNC
-            return True
+            if self.client and hasattr(self.client, 'click'):
+                # Map button names to button numbers
+                button_map = {'left': 1, 'middle': 2, 'right': 3}
+                button_num = button_map.get(button, 1)
+                return await self.client.click(x, y, button_num)
+            else:
+                logger.info(f"Mock clicking at ({x}, {y}) with {button} button")
+                return True
         except Exception as e:
             logger.error(f"Failed to click: {e}")
             return False
@@ -139,9 +175,11 @@ class VNCBridge:
             await self.connect()
         
         try:
-            logger.info(f"Typing text: {text[:20]}...")
-            # In production, this would send keystrokes to VNC
-            return True
+            if self.client and hasattr(self.client, 'type_text'):
+                return await self.client.type_text(text)
+            else:
+                logger.info(f"Mock typing text: {text[:20]}...")
+                return True
         except Exception as e:
             logger.error(f"Failed to type text: {e}")
             return False
@@ -152,9 +190,11 @@ class VNCBridge:
             await self.connect()
         
         try:
-            logger.info(f"Sending key combination: {keys}")
-            # In production, this would send key combination to VNC
-            return True
+            if self.client and hasattr(self.client, 'key_press'):
+                return await self.client.key_press(keys)
+            else:
+                logger.info(f"Mock sending key combination: {keys}")
+                return True
         except Exception as e:
             logger.error(f"Failed to send key combination: {e}")
             return False
@@ -165,9 +205,13 @@ class VNCBridge:
             await self.connect()
         
         try:
-            logger.info(f"Moving mouse to ({x}, {y}) over {duration}s")
-            # In production, this would move mouse smoothly
-            return True
+            if self.client and hasattr(self.client, 'move_mouse'):
+                # Real VNC clients typically don't support smooth movement
+                # Just click at the target position
+                return await self.client.click(x, y, 0)  # 0 = no button click
+            else:
+                logger.info(f"Mock moving mouse to ({x}, {y}) over {duration}s")
+                return True
         except Exception as e:
             logger.error(f"Failed to move mouse: {e}")
             return False

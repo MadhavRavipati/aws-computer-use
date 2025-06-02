@@ -1,0 +1,105 @@
+{
+  "family": "computer-use-dev",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "2048",
+  "memory": "4096",
+  "executionRoleArn": "arn:aws:iam::156246831523:role/computer-use-ecs-execution-dev",
+  "taskRoleArn": "arn:aws:iam::156246831523:role/computer-use-ecs-task-dev",
+  "containerDefinitions": [
+    {
+      "name": "desktop",
+      "image": "156246831523.dkr.ecr.us-west-2.amazonaws.com/computer-use/desktop-dev:amd64-minimal",
+      "cpu": 1024,
+      "memory": 2048,
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 5900,
+          "protocol": "tcp"
+        },
+        {
+          "containerPort": 6080,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "DISPLAY",
+          "value": ":1"
+        },
+        {
+          "name": "VNC_RESOLUTION",
+          "value": "1920x1080"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "VNC_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:us-west-2:156246831523:secret:computer-use/vnc-password-dev-20250601160906916900000001-OBTyUe"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/computer-use/desktop-dev",
+          "awslogs-region": "us-west-2",
+          "awslogs-stream-prefix": "desktop"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:6080/ || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    },
+    {
+      "name": "vnc-bridge",
+      "image": "156246831523.dkr.ecr.us-west-2.amazonaws.com/computer-use/vnc-bridge-dev:amd64-minimal",
+      "cpu": 1024,
+      "memory": 2048,
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "DESKTOP_HOST",
+          "value": "localhost"
+        },
+        {
+          "name": "DESKTOP_PORT",
+          "value": "5900"
+        },
+        {
+          "name": "BEDROCK_MODEL_ID",
+          "value": "anthropic.claude-3-5-sonnet-20241022-v2:0"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "us-west-2"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/computer-use/vnc-bridge-dev",
+          "awslogs-region": "us-west-2",
+          "awslogs-stream-prefix": "vnc-bridge"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 30
+      }
+    }
+  ]
+}

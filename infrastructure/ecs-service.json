@@ -1,0 +1,26 @@
+{
+  "serviceName": "computer-use-service-dev",
+  "cluster": "computer-use-dev",
+  "taskDefinition": "computer-use-dev:1",
+  "desiredCount": 1,
+  "launchType": "FARGATE",
+  "deploymentConfiguration": {
+    "maximumPercent": 200,
+    "minimumHealthyPercent": 100
+  },
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "subnets": [
+        "subnet-0015f0f92f9a61275",
+        "subnet-0d4504a398c0f8892"
+      ],
+      "securityGroups": [
+        "sg-0292b7f52496aedf3"
+      ],
+      "assignPublicIp": "ENABLED"
+    }
+  },
+  "healthCheckGracePeriodSeconds": 120,
+  "enableECSManagedTags": true,
+  "propagateTags": "TASK_DEFINITION"
+}

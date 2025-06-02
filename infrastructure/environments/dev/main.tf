@@ -1,5 +1,5 @@
-# ABOUTME: Main Terraform configuration for development environment
-# ABOUTME: Orchestrates all AWS resources for Computer Use Demo
+# ABOUTME: Simplified Terraform configuration for initial deployment
+# ABOUTME: Uses only existing modules to deploy core infrastructure
 
 terraform {
   required_version = ">= 1.0"
@@ -9,13 +9,6 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
-  }
-
-  backend "s3" {
-    # Configure this based on your AWS account
-    # bucket = "your-terraform-state-bucket"
-    # key    = "computer-use/dev/terraform.tfstate"
-    # region = "us-west-2"
   }
 }
 
@@ -37,12 +30,6 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# Use existing VPC if available, otherwise create new one
-data "aws_vpc" "existing" {
-  count = var.use_existing_vpc ? 1 : 0
-  id    = var.existing_vpc_id
-}
-
 # Networking module
 module "networking" {
   source = "../../modules/networking"
@@ -54,38 +41,6 @@ module "networking" {
   availability_zones = data.aws_availability_zones.available.names
 }
 
-# ECS cluster and services
-module "ecs" {
-  source = "../../modules/ecs"
-  
-  environment    = var.environment
-  vpc_id         = module.networking.vpc_id
-  private_subnets = module.networking.private_subnet_ids
-  public_subnets  = module.networking.public_subnet_ids
-}
-
-# Bedrock agent configuration
-module "bedrock" {
-  source = "../../modules/bedrock"
-  
-  environment      = var.environment
-  lambda_role_arn  = module.lambda.execution_role_arn
-  s3_bucket_arn    = module.storage.s3_bucket_arn
-  dynamodb_table_arn = module.storage.dynamodb_table_arn
-}
-
-# Lambda functions
-module "lambda" {
-  source = "../../modules/lambda"
-  
-  environment        = var.environment
-  vpc_id            = module.networking.vpc_id
-  private_subnets   = module.networking.private_subnet_ids
-  ecs_cluster_arn   = module.ecs.cluster_arn
-  dynamodb_table_name = module.storage.dynamodb_table_name
-  s3_bucket_name     = module.storage.s3_bucket_name
-}
-
 # Storage resources
 module "storage" {
   source = "../../modules/storage"
@@ -94,29 +49,80 @@ module "storage" {
   account_id  = data.aws_caller_identity.current.account_id
 }
 
+# ECS cluster and services
+module "ecs" {
+  source = "../../modules/ecs"
+  
+  environment     = var.environment
+  vpc_id          = module.networking.vpc_id
+  private_subnets = module.networking.private_subnet_ids
+  public_subnets  = module.networking.public_subnet_ids
+}
+
+# Lambda functions
+module "lambda" {
+  source = "../../modules/lambda"
+  
+  environment            = var.environment
+  sessions_table_arn     = module.storage.dynamodb_table_arn
+  sessions_table_name    = module.storage.dynamodb_table_name
+  ecs_cluster_name       = module.ecs.cluster_name
+  ecs_task_role_arn      = module.ecs.task_role_arn
+  ecs_execution_role_arn = module.ecs.execution_role_arn
+}
+
 # API Gateway
 module "api" {
   source = "../../modules/api"
   
-  environment       = var.environment
-  lambda_functions  = module.lambda.function_arns
-  allowed_origins   = var.allowed_origins
+  environment                   = var.environment
+  session_manager_lambda_arn    = module.lambda.session_manager_lambda_arn
+  session_manager_lambda_name   = module.lambda.session_manager_lambda_name
+  websocket_handler_lambda_arn  = module.lambda.websocket_handler_lambda_arn
+  websocket_handler_lambda_name = module.lambda.websocket_handler_lambda_name
 }
 
-# Monitoring and alerts
-module "monitoring" {
-  source = "../../modules/monitoring"
+# CloudFront distribution
+module "cloudfront" {
+  source = "../../modules/cloudfront"
   
-  environment              = var.environment
-  ecs_cluster_name        = module.ecs.cluster_name
-  bedrock_agent_id        = module.bedrock.agent_id
-  budget_notification_email = var.budget_notification_email
+  environment                    = var.environment
+  s3_bucket_id                   = module.storage.s3_bucket_id
+  s3_bucket_regional_domain_name = module.storage.s3_bucket_regional_domain_name
+  s3_bucket_arn                  = module.storage.frontend_bucket_arn
+  api_gateway_url                = module.api.rest_api_endpoint
+  websocket_url                  = module.api.websocket_api_endpoint
 }
 
-# Frontend deployment
-module "frontend" {
-  source = "../../modules/frontend"
-  
-  environment = var.environment
-  domain_name = var.domain_name
+# Outputs for reference
+output "vpc_id" {
+  value = module.networking.vpc_id
+}
+
+output "ecs_cluster_name" {
+  value = module.ecs.cluster_name
+}
+
+output "s3_bucket_name" {
+  value = module.storage.s3_bucket_name
+}
+
+output "dynamodb_table_name" {
+  value = module.storage.dynamodb_table_name
+}
+
+output "rest_api_endpoint" {
+  value = module.api.rest_api_endpoint
+}
+
+output "websocket_api_endpoint" {
+  value = module.api.websocket_api_endpoint
+}
+
+output "cloudfront_distribution_url" {
+  value = module.cloudfront.distribution_url
+}
+
+output "cloudfront_distribution_id" {
+  value = module.cloudfront.distribution_id
 }

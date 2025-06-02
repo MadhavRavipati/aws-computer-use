@@ -1,0 +1,46 @@
+{
+  "family": "vnc-bridge-dev",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::156246831523:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::156246831523:role/computer-use-task-role-dev",
+  "containerDefinitions": [
+    {
+      "name": "vnc-bridge",
+      "image": "156246831523.dkr.ecr.us-west-2.amazonaws.com/computer-use/vnc-bridge:latest",
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "SESSIONS_TABLE",
+          "value": "computer-use-sessions-dev"
+        },
+        {
+          "name": "AWS_DEFAULT_REGION",
+          "value": "us-west-2"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/computer-use/vnc-bridge-dev",
+          "awslogs-region": "us-west-2",
+          "awslogs-stream-prefix": "vnc-bridge"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    }
+  ]
+}
